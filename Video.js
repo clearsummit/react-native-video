@@ -1,5 +1,5 @@
 import React, {Component, PropTypes} from 'react';
-import {StyleSheet, requireNativeComponent, NativeModules, View} from 'react-native';
+import {StyleSheet, requireNativeComponent, NativeModules, View, Image} from 'react-native';
 import resolveAssetSource from 'react-native/Libraries/Image/resolveAssetSource';
 import VideoResizeMode from './VideoResizeMode.js';
 
@@ -10,6 +10,14 @@ const styles = StyleSheet.create({
 });
 
 export default class Video extends Component {
+
+  constructor(props) {
+    super(props);
+
+    this.state = {
+      showPoster: true,
+    };
+  }
 
   setNativeProps(nativeProps) {
     this._root.setNativeProps(nativeProps);
@@ -56,6 +64,10 @@ export default class Video extends Component {
   };
 
   _onSeek = (event) => {
+    if (this.state.showPoster) {
+      this.setState({showPoster: false});
+    }
+
     if (this.props.onSeek) {
       this.props.onSeek(event.nativeEvent);
     }
@@ -110,8 +122,30 @@ export default class Video extends Component {
   };
 
   _onPlaybackRateChange = (event) => {
+    if (this.state.showPoster && (event.nativeEvent.playbackRate !== 0)) {
+      this.setState({showPoster: false});
+    }
+
     if (this.props.onPlaybackRateChange) {
       this.props.onPlaybackRateChange(event.nativeEvent);
+    }
+  };
+
+  _onAudioBecomingNoisy = () => {
+    if (this.props.onAudioBecomingNoisy) {
+      this.props.onAudioBecomingNoisy();
+    }
+  };
+
+  _onAudioFocusChanged = (event) => {
+    if (this.props.onAudioFocusChanged) {
+      this.props.onAudioFocusChanged(event.nativeEvent);
+    }
+  };
+
+  _onBuffer = (event) => {
+    if (this.props.onBuffer) {
+      this.props.onBuffer(event.nativeEvent);
     }
   };
 
@@ -125,7 +159,7 @@ export default class Video extends Component {
     }
 
     const isNetwork = !!(uri && uri.match(/^https?:/));
-    const isAsset = !!(uri && uri.match(/^(assets-library|file|content):/));
+    const isAsset = !!(uri && uri.match(/^(assets-library|file|content|ms-appx|ms-appdata):/));
 
     let nativeResizeMode;
     if (resizeMode === VideoResizeMode.stretch) {
@@ -146,7 +180,9 @@ export default class Video extends Component {
         uri,
         isNetwork,
         isAsset,
-        type: source.type || 'mp4',
+        type: source.type,
+        mainVer: source.mainVer || 0,
+        patchVer: source.patchVer || 0,
       },
       onVideoLoadStart: this._onLoadStart,
       onVideoLoad: this._onLoad,
@@ -154,6 +190,7 @@ export default class Video extends Component {
       onVideoProgress: this._onProgress,
       onVideoSeek: this._onSeek,
       onVideoEnd: this._onEnd,
+      onVideoBuffer: this._onBuffer,
       onVideoFullscreenPlayerWillPresent: this._onFullscreenPlayerWillPresent,
       onVideoFullscreenPlayerDidPresent: this._onFullscreenPlayerDidPresent,
       onVideoFullscreenPlayerWillDismiss: this._onFullscreenPlayerWillDismiss,
@@ -162,7 +199,33 @@ export default class Video extends Component {
       onPlaybackStalled: this._onPlaybackStalled,
       onPlaybackResume: this._onPlaybackResume,
       onPlaybackRateChange: this._onPlaybackRateChange,
+      onAudioFocusChanged: this._onAudioFocusChanged,
+      onAudioBecomingNoisy: this._onAudioBecomingNoisy,
     });
+
+    if (this.props.poster && this.state.showPoster) {
+      const posterStyle = {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        resizeMode: 'contain',
+      };
+
+      return (
+        <View style={nativeProps.style}>
+          <RCTVideo
+            ref={this._assignRoot}
+            {...nativeProps}
+          />
+          <Image
+            style={posterStyle}
+            source={{uri: this.props.poster}}
+          />
+        </View>
+      );
+    }
 
     return (
       <RCTVideo
@@ -178,6 +241,17 @@ Video.propTypes = {
   src: PropTypes.object,
   seek: PropTypes.number,
   fullscreen: PropTypes.bool,
+  onVideoLoadStart: PropTypes.func,
+  onVideoLoad: PropTypes.func,
+  onVideoBuffer: PropTypes.func,
+  onVideoError: PropTypes.func,
+  onVideoProgress: PropTypes.func,
+  onVideoSeek: PropTypes.func,
+  onVideoEnd: PropTypes.func,
+  onVideoFullscreenPlayerWillPresent: PropTypes.func,
+  onVideoFullscreenPlayerDidPresent: PropTypes.func,
+  onVideoFullscreenPlayerWillDismiss: PropTypes.func,
+  onVideoFullscreenPlayerDidDismiss: PropTypes.func,
 
   /* Wrapper component */
   source: PropTypes.oneOfType([
@@ -188,6 +262,7 @@ Video.propTypes = {
     PropTypes.number
   ]),
   resizeMode: PropTypes.string,
+  poster: PropTypes.string,
   repeat: PropTypes.bool,
   paused: PropTypes.bool,
   muted: PropTypes.bool,
@@ -195,10 +270,13 @@ Video.propTypes = {
   rate: PropTypes.number,
   playInBackground: PropTypes.bool,
   playWhenInactive: PropTypes.bool,
+  disableFocus: PropTypes.bool,
   controls: PropTypes.bool,
   currentTime: PropTypes.number,
+  progressUpdateInterval: PropTypes.number,
   onLoadStart: PropTypes.func,
   onLoad: PropTypes.func,
+  onBuffer: PropTypes.func,
   onError: PropTypes.func,
   onProgress: PropTypes.func,
   onSeek: PropTypes.func,
@@ -211,6 +289,8 @@ Video.propTypes = {
   onPlaybackStalled: PropTypes.func,
   onPlaybackResume: PropTypes.func,
   onPlaybackRateChange: PropTypes.func,
+  onAudioFocusChanged: PropTypes.func,
+  onAudioBecomingNoisy: PropTypes.func,
 
   /* Required by react-native */
   scaleX: PropTypes.number,
